@@ -1,0 +1,17 @@
+.DS_Store
+.nvimlog
+
+# Editor or app-local databases / generated state
+zed/prompts/
+
+# Bundled or installed extensions/plugins
+raycast/
+tmux/plugins/
+
+# Local backups and transient files
+karabiner/automatic_backups/
+tmux/*.bak
+tmux/*~
+
+# Nested git metadata from vendored tools
+**/.git/
