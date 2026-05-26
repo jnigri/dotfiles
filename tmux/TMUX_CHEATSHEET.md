@@ -12,7 +12,7 @@ Prefix: `Ctrl-b`
 
 ## Windows
 
-- New window: `Prefix` `Ctrl-c`
+- New window: `Prefix` `c`
 - Rename window: `Prefix` `r`
 - List windows: `Prefix` `w`
 - Choose window: `Prefix` `"`
@@ -29,7 +29,7 @@ Prefix: `Ctrl-b`
 - Move up: `Prefix` `k`
 - Move right: `Prefix` `l`
 - Toggle zoom: `Prefix` `z`
-- Kill current pane: `Prefix` `c`
+- Kill current pane: `Prefix` `X`
 - Swap pane downward: `Prefix` `x`
 - Toggle pane border status: `Prefix` `P`
 - Clear pane: `Prefix` `K`
