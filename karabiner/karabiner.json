@@ -58,7 +58,7 @@
                         ]
                     },
                     {
-                        "description": "Fn + Letter -> Left_Shift + Left_Option + Left_Control + Left_Command + Letter",
+                        "description": "Fn + Key -> Left_Shift + Left_Option + Left_Control + Left_Command + Key",
                         "enabled": false,
                         "manipulators": [
                             {
@@ -812,11 +812,27 @@
                                     }
                                 ],
                                 "type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "spacebar",
+                                    "modifiers": {
+                                        "mandatory": ["fn"],
+                                        "optional": ["caps_lock"]
+                                    }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "spacebar",
+                                        "modifiers": ["left_shift", "left_option", "left_control", "left_command"]
+                                    }
+                                ],
+                                "type": "basic"
                             }
                         ]
                     },
                     {
-                        "description": "Fn + Letter -> Left_Shift + Left_Option + Left_Control + Left_Command + Letter",
+                        "description": "Fn + Key -> Left_Shift + Left_Option + Left_Control + Left_Command + Key",
                         "manipulators": [
                             {
                                 "from": {
@@ -1565,6 +1581,22 @@
                                 "to": [
                                     {
                                         "key_code": "slash",
+                                        "modifiers": ["left_shift", "left_option", "left_control", "left_command"]
+                                    }
+                                ],
+                                "type": "basic"
+                            },
+                            {
+                                "from": {
+                                    "key_code": "spacebar",
+                                    "modifiers": {
+                                        "mandatory": ["fn"],
+                                        "optional": ["caps_lock"]
+                                    }
+                                },
+                                "to": [
+                                    {
+                                        "key_code": "spacebar",
                                         "modifiers": ["left_shift", "left_option", "left_control", "left_command"]
                                     }
                                 ],
