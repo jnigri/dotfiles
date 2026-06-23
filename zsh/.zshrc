@@ -16,7 +16,7 @@ eval "$(starship init zsh)"
 eval "$(mise activate zsh)"
 
 ## ALIASES
-alias settings="nvim ~/.zshrc && source ~/.zshrc"
+alias settings="nvim ~/.config/zsh/.zshrc && source ~/.config/zsh/.zshrc"
 alias l="eza -l"
 alias ll="l -a"
 alias cd="z"
@@ -27,9 +27,4 @@ alias claude="claude --dangerously-skip-permissions"
 # Created by `pipx` on 2026-02-14 09:25:20
 export PATH="$PATH:$HOME/.local/bin"
 
-
-fpath+=~/.zfunc; autoload -Uz compinit; compinit
-
-zstyle ':completion:*' menu select
-
-export CLAUDE_CONFIG_DIR="$HOME/.config/claude"
+echo 'setup'
