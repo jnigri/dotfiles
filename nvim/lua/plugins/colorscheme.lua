@@ -1,15 +1,16 @@
 return {
   {
-    "catppuccin/nvim",
-    name = "catppuccin",
-    opts = {
-      flavour = "mocha",
-    },
+    "filipjanevski/0x96f.nvim",
+    name = "0x96f",
+    priority = 1000,
+    config = function()
+      require("0x96f").setup()
+    end,
   },
   {
     "LazyVim/LazyVim",
     opts = {
-      colorscheme = "catppuccin",
+      colorscheme = "0x96f",
     },
   },
 }
