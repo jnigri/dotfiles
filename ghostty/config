@@ -1,6 +1,14 @@
 # Use the font's registered family name to avoid fallback to a non-Nerd variant.
 font-family = "JetBrainsMono NFM"
 font-size = 15
-theme = "0x96f"
+theme = "light:asiimov,dark:asiimov-dark"
 macos-titlebar-style = hidden
-window-padding-y = 8
+# no top padding: the tmux tab bar is exactly one row, so extra space above it
+# pushes its text off-center;
+# no bottom padding: Neovim's message row already spaces the footer from the edge;
+# no left padding so the session block's edge reaches the window edge.
+window-padding-y = 0,0
+window-padding-x = 0,2
+# Paint window padding with the nearest cell color, so the tmux tab bar
+# reaches the top edge of the window.
+window-padding-color = extend-always

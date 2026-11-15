@@ -1,0 +1,27 @@
+# Asiimov: off-white stock, hazard orange, black stripes.
+# Palette source: https://github.com/jnigri/asiimov-theme (light flavor).
+# The theme has no yellow/blue/magenta/cyan, so those ANSI slots map to
+# a derived amber, the orange accents and cool greys.
+background = #eef0f1
+foreground = #161616
+cursor-color = #e85400
+cursor-text = #eef0f1
+selection-background = #ccd1d4
+selection-foreground = #161616
+
+palette = 0=#1c1c1c
+palette = 1=#c8102e
+palette = 2=#23803f
+palette = 3=#a86400
+palette = 4=#e85400
+palette = 5=#b33a00
+palette = 6=#4d5357
+palette = 7=#a3a8ac
+palette = 8=#6c7176
+palette = 9=#e0314d
+palette = 10=#2e9a4f
+palette = 11=#c27a0a
+palette = 12=#ff6a1a
+palette = 13=#d14f10
+palette = 14=#6c7176
+palette = 15=#bfc4c7

@@ -1,16 +1,21 @@
 return {
-  {
-    "filipjanevski/0x96f.nvim",
-    name = "0x96f",
-    priority = 1000,
-    config = function()
-      require("0x96f").setup()
-    end,
-  },
+  -- Asiimov colorscheme lives in this config (colors/asiimov.lua + lua/asiimov/).
+  -- Source palette: https://github.com/jnigri/asiimov-theme
   {
     "LazyVim/LazyVim",
     opts = {
-      colorscheme = "0x96f",
+      colorscheme = "asiimov",
+    },
+  },
+  -- Follow macOS light/dark appearance while running: flips 'background',
+  -- which reloads the asiimov colorscheme in the matching flavor.
+  {
+    "f-person/auto-dark-mode.nvim",
+    lazy = false,
+    priority = 1000,
+    opts = {
+      update_interval = 3000,
+      fallback = "dark",
     },
   },
 }
