@@ -1,15 +1,11 @@
 # ~/.config
 
-User configuration files for various tools.
+My dotfiles, kept in `~/.config` and reused when setting up a new machine.
 
-## New machine setup
+## Setup
 
-### 1. Bootstrap zsh config location
-
-Add to `~/.zshenv` (must live at that exact path — zsh reads it before ZDOTDIR is known):
+Clone into `~/.config`, then point zsh at its config by adding to `~/.zshenv`:
 
 ```sh
 export ZDOTDIR="$HOME/.config/zsh"
 ```
-
-### 2. Symlink Claude skills
