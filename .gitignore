@@ -2,7 +2,7 @@
 .nvimlog
 
 # Editor or app-local databases / generated state
-zed/prompts/
+zed/
 
 # Bundled or installed extensions/plugins
 raycast/
