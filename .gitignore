@@ -15,3 +15,14 @@ tmux/*~
 
 # Nested git metadata from vendored tools
 **/.git/
+
+# Tool state, caches and machine-specific data (not config)
+mlflow/
+op/
+gh/
+greed/
+pain/
+plastext/
+opencode/
+Autodesk/
+zsh/.zcompdump*
