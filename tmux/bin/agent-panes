@@ -1,47 +1,15 @@
 #!/usr/bin/env zsh
-# Picker for every tmux pane running Claude Code, Codex or OpenCode, styled with the
-# Asiimov palette (@thm_* options, so it follows light/dark).
+# Picker for every tmux pane running Claude Code, Codex or OpenCode.
 #   bind A run-shell -b "~/.config/tmux/bin/agent-panes '#{client_name}'"
-# Called without AGENT_PICKER_POPUP it opens itself in a themed popup.
 #
 # Keys: j/k or arrows move · Enter jump to pane · Delete/Backspace/x kill agent (back to shell)
 #       X kill all (asks y/n) · q/Esc close. Refreshes every second.
 
-setopt extendedglob
-zmodload zsh/datetime  # EPOCHSECONDS
-: ${LANG:=en_US.UTF-8}; export LANG  # popups may start without a locale
-client="$1"
+source ${0:A:h}/picker.zsh "$@"
 
-thm() { local v=$(tmux show -gv "@thm_$1" 2>/dev/null); print -r -- "${v:-$2}"; }
-c_bg=$(thm bg '#141516')         c_fg=$(thm fg '#e6e8e9')
-c_accent=$(thm blue '#ff5a00')   c_green=$(thm green '#5fcf7d')
-c_yellow=$(thm yellow '#ffb547') c_red=$(thm red '#ff4d6a')
-c_sub=$(thm subtext_0 '#a9aeb2') c_dim=$(thm overlay_1 '#6b7074')
-c_line=$(thm surface_2 '#3a3d40') c_sel=$(thm surface_1 '#2c2f31')
-
-if [[ -z $AGENT_PICKER_POPUP ]]; then
-  exec tmux display-popup -c "$client" -E -w 90% -h 85% -b rounded \
-    -S "fg=$c_line" -s "bg=$c_bg,fg=$c_fg" -e AGENT_PICKER_POPUP=1 \
-    "${(q)0} ${(q)client}"
-fi
-
-rgb() { local h=${2#\#}; print -rn -- $'\e['"$1;2;$((16#${h[1,2]}));$((16#${h[3,4]}));$((16#${h[5,6]}))m"; }
-F_fg=$(rgb 38 $c_fg) F_accent=$(rgb 38 $c_accent) F_green=$(rgb 38 $c_green)
-F_yellow=$(rgb 38 $c_yellow) F_red=$(rgb 38 $c_red) F_sub=$(rgb 38 $c_sub)
-F_dim=$(rgb 38 $c_dim) F_line=$(rgb 38 $c_line) F_bg=$(rgb 38 $c_bg)
-B_sel=$(rgb 48 $c_sel) B_accent=$(rgb 48 $c_accent)
-R=$'\e[0m' BOLD=$'\e[1m' EOL=$'\e[K'
-
-agents=(claude codex opencode)
-# Each agent is shown as its logo, from the AgentIcons font
-# (tmux/agent-icons, mapped in ghostty/config). AGENT_PICKER_ICONS=0 shows names.
-typeset -A glyphs=(claude $'\U000F2000' codex $'\U000F2001' opencode $'\U000F2002')
-typeset -A colors=(claude "$(rgb 38 '#D97757')" codex "$(rgb 38 '#7A9DFF')" opencode "$(rgb 38 '#CFCECD')")
-sel=1 msg="" msg_color=$F_sub
-
-cleanup() { printf '\e[?25h\e[?7h\e[0m'; }
-trap cleanup EXIT
-printf '\e[?25l\e[?7l'  # hide cursor, no autowrap (long lines clip)
+picker_title=agents
+picker_empty="No Claude Code, Codex or OpenCode panes running."
+hints=('↵' jump '⌫' kill X 'kill all' q close)
 
 # Order: waiting on a permission prompt or question, then idle (waiting for the
 # next message), then working, then agents without state (Codex, OpenCode).
@@ -82,14 +50,33 @@ load() {
   (( sel < 1 )) && sel=1
 }
 
-ago() {  # ago <epoch> -> 12s / 5m / 3h / 2d
-  (( $1 )) || { print -rn -- ''; return; }
-  local d=$(( EPOCHSECONDS - $1 ))
-  if (( d < 60 )); then print -rn -- "${d}s"
-  elif (( d < 3600 )); then print -rn -- "$(( d / 60 ))m"
-  elif (( d < 86400 )); then print -rn -- "$(( d / 3600 ))h"
-  else print -rn -- "$(( d / 86400 ))d"; fi
+counts() {
+  print -rn -- "$F_fg${#ids}$F_dim running"
+  (( waiting )) && print -rn -- "  $F_red● $F_sub$waiting waiting"
+  (( busy )) && print -rn -- "  $F_yellow● $F_sub$busy working"
+  (( idle )) && print -rn -- "  $F_green● $F_sub$idle idle"
 }
+
+row() {  # row <index>
+  local i=$1 s=$targets[i] glyph bar bg tcol
+  row_style $i
+  case $states[i] in
+    ask)  glyph="$F_red●" ;;
+    busy) glyph="$F_yellow●" ;;
+    idle) glyph="$F_green●" ;;
+    *)    glyph="$F_dim○" ;;
+  esac
+  local c=$cmds[i]; local label=${glyphs[$c]}
+  [[ -z $label || $AGENT_PICKER_ICONS == 0 ]] && label=${(r:10:: :)c} || label="$label  "
+  local agent=${colors[$c]:-$F_sub}$label
+  local sess=${s%%:*} win=${s#*:}
+  local n=$(( width + 4 - ${#s} )); (( n < 1 )) && n=1
+  local pad=${(l:n:: :)} age=${(l:3:: :)$(ago $lasts[i])}
+  print -rn -- "$bg$bar $glyph  $agent$BOLD$F_fg$sess$R$bg$F_dim › $F_sub$win$pad$F_dim$age   $tcol${titles[i]}$EOL$R"
+}
+
+preview_target() { print -rn -- ${ids[sel]}; }
+preview_label() { print -rn -- ${targets[sel]/:/ › }; }
 
 is_agent() { (( ${agents[(Ie)$(tmux display -p -t "$1" '#{pane_current_command}' 2>/dev/null)]} )); }
 
@@ -110,97 +97,21 @@ stop_agent() {
   ! is_agent "$id"
 }
 
-say() { msg=$1; msg_color=${2:-$F_sub}; }
-
-row() {  # row <index>
-  local i=$1 s=$targets[i] glyph agent bar=' ' bg='' tcol=$F_sub
-  case $states[i] in
-    ask)  glyph="$F_red●" ;;
-    busy) glyph="$F_yellow●" ;;
-    idle) glyph="$F_green●" ;;
-    *)    glyph="$F_dim○" ;;
-  esac
-  local c=$cmds[i]; local label=${glyphs[$c]}
-  [[ -z $label || $AGENT_PICKER_ICONS == 0 ]] && label=${(r:10:: :)c} || label="$label  "
-  agent=${colors[$c]:-$F_sub}$label
-  if (( i == sel )); then bar="$F_accent▌" bg=$B_sel tcol=$F_fg; fi
-  local sess=${s%%:*} win=${s#*:}
-  local n=$(( width + 4 - ${#s} )); (( n < 1 )) && n=1
-  local pad=${(l:n:: :)} age=${(l:3:: :)$(ago $lasts[i])}
-  print -rn -- "$bg$bar $glyph  $agent$BOLD$F_fg$sess$R$bg$F_dim › $F_sub$win$pad$F_dim$age   $tcol${titles[i]}$EOL$R"$'\n'
-}
-
-draw() {
-  local cols=$COLUMNS rows=$LINES i line out
-  out=$'\e[?2026h\e[H'
-  # Header: accent block like the status bar's session block, then counts.
-  out+=$'\n'"  $B_accent$F_bg$BOLD  agents  $R  $F_fg${#ids}$F_dim running"
-  (( waiting )) && out+="  $F_red● $F_sub$waiting waiting"
-  (( busy )) && out+="  $F_yellow● $F_sub$busy working"
-  (( idle )) && out+="  $F_green● $F_sub$idle idle"
-  out+="$EOL"$'\n'"$EOL"$'\n'
-  if (( ! ${#ids} )); then
-    out+="   $F_dim No Claude Code, Codex or OpenCode panes running.$EOL"$'\n'
-  fi
-  for (( i = 1; i <= ${#ids}; i++ )); do out+=$(row $i)$'\n'; done
-  # Preview of the selected pane, colors kept.
-  local used=$(( 3 + ${#ids} + 2 ))
-  local room=$(( rows - used - 2 ))
-  if (( ${#ids} && room > 1 )); then
-    local label=" ${targets[sel]/:/ › } "
-    out+="$EOL"$'\n'"  $F_line──$F_accent$label$F_line${(l:cols-6-${#label}::─:)}$R$EOL"$'\n'
-    local -a prev=("${(@f)$(tmux capture-pane -e -p -t "${ids[sel]}" 2>/dev/null)}")
-    while (( ${#prev} )) && [[ -z ${${prev[-1]//$'\e'\[[0-9;:]#m/}// } ]]; do prev[-1]=(); done
-    # No reset between lines: capture-pane -e only emits color changes, so a
-    # highlight that reaches the right edge carries on into the next line.
-    for line in "${(@)prev[-(room-1),-1]}"; do out+="   $line$EOL"$'\n'; done
-    out+=$R
-  fi
-  out+=$'\e[J'
-  # Footer: message, or key hints styled as the accent key plus a dim label.
-  out+=$'\e['$rows$';1H  '
-  if [[ -n $msg ]]; then
-    out+="$msg_color$msg$R"
-  else
-    local k
-    for k in '↵' jump '⌫' kill X 'kill all' q close; do
-      [[ $k == (↵|⌫|X|q) ]] && out+="$F_accent$BOLD$k$R  " || out+="$F_dim$k   "
-    done
-  fi
-  out+="$R$EOL"$'\e[?2026l'
-  print -rn -- "$out"
-}
-
-load
-while true; do
-  draw
-  key=""
-  read -s -k 1 -t 1 key || { load; continue; }  # timeout: live refresh
-  msg=""
-  if [[ $key == $'\e' ]]; then
-    seq=""; read -s -k 2 -t 0.05 seq
-    [[ $seq == '[3' ]] && { read -s -k 1 -t 0.05; key=DEL; }
-    [[ $seq == '[A' ]] && key=k
-    [[ $seq == '[B' ]] && key=j
-  fi
+on_key() {
+  (( ${#ids} )) || return
+  local id all left
   case $key in
-    j) (( sel < ${#ids} )) && (( sel++ )) ;;
-    k) (( sel > 1 )) && (( sel-- )) ;;
-    $'\n'|$'\r')
-      (( ${#ids} )) || continue
+    $'\n')
       id=${ids[sel]}
       tmux switch-client -c "$client" -t "$id" \; select-window -t "$id" \; select-pane -t "$id"
       exit 0 ;;
-    DEL|$'\x7f'|$'\b'|x)
-      (( ${#ids} )) || continue
+    DEL|x)
       say "Killing ${targets[sel]}…" $F_yellow; draw
       if stop_agent "${ids[sel]}"; then say "Killed ${targets[sel]}." $F_green
       else say "Could not kill ${targets[sel]}." $F_red; fi
       load ;;
     X)
-      (( ${#ids} )) || continue
-      say "Kill all ${#ids} agents? ${BOLD}y${R}${F_red}/n" $F_red; draw
-      read -s -k 1 key; [[ $key == [yY] ]] || { say "Cancelled."; continue; }
+      confirm "Kill all ${#ids} agents?" || return
       say "Killing ${#ids} agents…" $F_yellow; draw
       all=("${ids[@]}")
       for id in $all; do stop_agent "$id" & done
@@ -209,6 +120,7 @@ while true; do
       if (( left )); then say "$left could not be killed." $F_red
       else say "Killed all ${#all}." $F_green; fi
       load ;;
-    q|$'\e') exit 0 ;;
   esac
-done
+}
+
+picker_run
