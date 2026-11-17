@@ -1,0 +1,17 @@
+#!/bin/sh
+# Claude Code hook: records agent activity on the tmux pane, for agent-panes.
+#   agent-mark prompt  user sent a message (or session started)
+#   agent-mark ask     Claude waits on a permission prompt or a question
+#   agent-mark done    tool finished / turn stopped: no longer waiting
+# Pane options: @agent_last (epoch of last interaction), @agent_attention (1 when waiting).
+[ -n "$TMUX_PANE" ] || exit 0
+p="$TMUX_PANE"
+case $1 in
+  prompt) tmux set -p -t "$p" @agent_last "$(date +%s)" \; set -pu -t "$p" @agent_attention ;;
+  ask)    tmux set -p -t "$p" @agent_attention 1 ;;
+  done)
+    # Answering a prompt counts as an interaction.
+    [ "$(tmux display -p -t "$p" '#{@agent_attention}')" = 1 ] &&
+      tmux set -p -t "$p" @agent_last "$(date +%s)" \; set -pu -t "$p" @agent_attention ;;
+esac >/dev/null 2>&1
+exit 0

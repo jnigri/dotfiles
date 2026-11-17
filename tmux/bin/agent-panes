@@ -8,6 +8,7 @@
 #       X kill all (asks y/n) · q/Esc close. Refreshes every second.
 
 setopt extendedglob
+zmodload zsh/datetime  # EPOCHSECONDS
 : ${LANG:=en_US.UTF-8}; export LANG  # popups may start without a locale
 client="$1"
 
@@ -42,23 +43,52 @@ cleanup() { printf '\e[?25h\e[?7h\e[0m'; }
 trap cleanup EXIT
 printf '\e[?25l\e[?7l'  # hide cursor, no autowrap (long lines clip)
 
+# Order: waiting on a permission prompt or question, then idle (waiting for the
+# next message), then working, then agents without state (Codex, OpenCode).
+# Inside each group, most recent interaction first. Both come from the
+# @agent_attention / @agent_last pane options set by Claude Code hooks
+# (tmux/bin/agent-mark).
 load() {
-  local s; ids=() targets=() cmds=() titles=() states=()
-  busy=0
-  local id target cmd title state
-  while IFS=$'\t' read -r id target cmd title; do
+  local keep=${ids[sel]} s line US=$'\x1f'  # unit separator: keeps empty fields
+  ids=() targets=() cmds=() titles=() states=() lasts=()
+  busy=0 waiting=0 idle=0
+  local id target cmd last att title state rank
+  local -a found
+  while IFS=$US read -r id target cmd last att title; do
     (( ${agents[(Ie)$cmd]} )) || continue
     # Claude Code titles start with ✳ when idle, a braille spinner when working.
     case $title in
       ✳*) state=idle; title=${title#✳} ;;
-      [⠀-⣿]*) state=busy; title=${title:1}; (( busy++ )) ;;
+      [⠀-⣿]*) state=busy; title=${title:1} ;;
       *) state=unknown ;;
     esac
-    ids+=$id targets+=$target cmds+=$cmd titles+=${title## #} states+=$state
-  done < <(tmux list-panes -a -F $'#{pane_id}\t#{session_name}:#{window_name}\t#{pane_current_command}\t#{pane_title}')
+    [[ $att == 1 ]] && state=ask
+    case $state in
+      ask) rank=0; (( waiting++ )) ;;
+      idle) rank=1; (( idle++ )) ;;
+      busy) rank=2; (( busy++ )) ;;
+      *) rank=3 ;;
+    esac
+    found+="$rank$US$(( 9999999999 - ${last:-0} ))$US$id$US$target$US$cmd$US${last:-0}$US$state$US${title## #}"
+  done < <(tmux list-panes -a -F "#{pane_id}$US#{session_name}:#{window_name}$US#{pane_current_command}$US#{@agent_last}$US#{@agent_attention}$US#{pane_title}")
+  for line in ${(o)found}; do
+    IFS=$US read -r _ _ id target cmd last state title <<< "$line"
+    ids+=$id targets+=$target cmds+=$cmd lasts+=$last states+=$state titles+=$title
+  done
   width=0; for s in $targets; do (( ${#s} > width )) && width=${#s}; done
+  # Keep the selection on the same pane when the order changes.
+  (( ${ids[(Ie)$keep]} )) && sel=${ids[(Ie)$keep]}
   (( sel > ${#ids} )) && sel=${#ids}
   (( sel < 1 )) && sel=1
+}
+
+ago() {  # ago <epoch> -> 12s / 5m / 3h / 2d
+  (( $1 )) || { print -rn -- ''; return; }
+  local d=$(( EPOCHSECONDS - $1 ))
+  if (( d < 60 )); then print -rn -- "${d}s"
+  elif (( d < 3600 )); then print -rn -- "$(( d / 60 ))m"
+  elif (( d < 86400 )); then print -rn -- "$(( d / 3600 ))h"
+  else print -rn -- "$(( d / 86400 ))d"; fi
 }
 
 is_agent() { (( ${agents[(Ie)$(tmux display -p -t "$1" '#{pane_current_command}' 2>/dev/null)]} )); }
@@ -85,6 +115,7 @@ say() { msg=$1; msg_color=${2:-$F_sub}; }
 row() {  # row <index>
   local i=$1 s=$targets[i] glyph agent bar=' ' bg='' tcol=$F_sub
   case $states[i] in
+    ask)  glyph="$F_red●" ;;
     busy) glyph="$F_yellow●" ;;
     idle) glyph="$F_green●" ;;
     *)    glyph="$F_dim○" ;;
@@ -95,17 +126,18 @@ row() {  # row <index>
   if (( i == sel )); then bar="$F_accent▌" bg=$B_sel tcol=$F_fg; fi
   local sess=${s%%:*} win=${s#*:}
   local n=$(( width + 4 - ${#s} )); (( n < 1 )) && n=1
-  local pad=${(l:n:: :)}
-  print -rn -- "$bg$bar $glyph  $agent$BOLD$F_fg$sess$R$bg$F_dim › $F_sub$win$pad$tcol${titles[i]}$EOL$R"$'\n'
+  local pad=${(l:n:: :)} age=${(l:3:: :)$(ago $lasts[i])}
+  print -rn -- "$bg$bar $glyph  $agent$BOLD$F_fg$sess$R$bg$F_dim › $F_sub$win$pad$F_dim$age   $tcol${titles[i]}$EOL$R"$'\n'
 }
 
 draw() {
-  local cols=$COLUMNS rows=$LINES i line out idle=$(( ${#ids} - busy ))
+  local cols=$COLUMNS rows=$LINES i line out
   out=$'\e[?2026h\e[H'
   # Header: accent block like the status bar's session block, then counts.
   out+=$'\n'"  $B_accent$F_bg$BOLD  agents  $R  $F_fg${#ids}$F_dim running"
+  (( waiting )) && out+="  $F_red● $F_sub$waiting waiting"
   (( busy )) && out+="  $F_yellow● $F_sub$busy working"
-  (( ${#ids} )) && out+="  $F_green● $F_sub$idle idle"
+  (( idle )) && out+="  $F_green● $F_sub$idle idle"
   out+="$EOL"$'\n'"$EOL"$'\n'
   if (( ! ${#ids} )); then
     out+="   $F_dim No Claude Code, Codex or OpenCode panes running.$EOL"$'\n'
