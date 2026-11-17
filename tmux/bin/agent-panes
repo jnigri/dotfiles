@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# Picker for every tmux pane running Claude Code or Codex, styled with the
+# Picker for every tmux pane running Claude Code, Codex or OpenCode, styled with the
 # Asiimov palette (@thm_* options, so it follows light/dark).
 #   bind A run-shell -b "~/.config/tmux/bin/agent-panes '#{client_name}'"
 # Called without AGENT_PICKER_POPUP it opens itself in a themed popup.
@@ -31,7 +31,11 @@ F_dim=$(rgb 38 $c_dim) F_line=$(rgb 38 $c_line) F_bg=$(rgb 38 $c_bg)
 B_sel=$(rgb 48 $c_sel) B_accent=$(rgb 48 $c_accent)
 R=$'\e[0m' BOLD=$'\e[1m' EOL=$'\e[K'
 
-agents=(claude codex)
+agents=(claude codex opencode)
+# Each agent is shown as its logo, from the AgentIcons font
+# (tmux/agent-icons, mapped in ghostty/config). AGENT_PICKER_ICONS=0 shows names.
+typeset -A glyphs=(claude $'\U000F2000' codex $'\U000F2001' opencode $'\U000F2002')
+typeset -A colors=(claude "$(rgb 38 '#D97757')" codex "$(rgb 38 '#7A9DFF')" opencode "$(rgb 38 '#CFCECD')")
 sel=1 msg="" msg_color=$F_sub
 
 cleanup() { printf '\e[?25h\e[?7h\e[0m'; }
@@ -85,12 +89,14 @@ row() {  # row <index>
     idle) glyph="$F_green●" ;;
     *)    glyph="$F_dim○" ;;
   esac
-  [[ $cmds[i] == claude ]] && agent="$F_accent" || agent="$F_green"
+  local c=$cmds[i]; local label=${glyphs[$c]}
+  [[ -z $label || $AGENT_PICKER_ICONS == 0 ]] && label=${(r:10:: :)c} || label="$label  "
+  agent=${colors[$c]:-$F_sub}$label
   if (( i == sel )); then bar="$F_accent▌" bg=$B_sel tcol=$F_fg; fi
   local sess=${s%%:*} win=${s#*:}
   local n=$(( width + 4 - ${#s} )); (( n < 1 )) && n=1
   local pad=${(l:n:: :)}
-  print -rn -- "$bg$bar $glyph  $agent${(r:8:: :)cmds[i]}$BOLD$F_fg$sess$R$bg$F_dim › $F_sub$win$pad$tcol${titles[i]}$EOL$R"$'\n'
+  print -rn -- "$bg$bar $glyph  $agent$BOLD$F_fg$sess$R$bg$F_dim › $F_sub$win$pad$tcol${titles[i]}$EOL$R"$'\n'
 }
 
 draw() {
@@ -102,7 +108,7 @@ draw() {
   (( ${#ids} )) && out+="  $F_green● $F_sub$idle idle"
   out+="$EOL"$'\n'"$EOL"$'\n'
   if (( ! ${#ids} )); then
-    out+="   $F_dim No Claude Code or Codex panes running.$EOL"$'\n'
+    out+="   $F_dim No Claude Code, Codex or OpenCode panes running.$EOL"$'\n'
   fi
   for (( i = 1; i <= ${#ids}; i++ )); do out+=$(row $i)$'\n'; done
   # Preview of the selected pane, colors kept.

@@ -12,3 +12,7 @@ window-padding-x = 0,2
 # Paint window padding with the nearest cell color, so the tmux tab bar
 # reaches the top edge of the window.
 window-padding-color = extend-always
+
+# Agent logos (Claude Code, Codex, OpenCode) for the tmux agent picker.
+# Font built from devicons.io SVGs by tmux/agent-icons/build.py.
+font-codepoint-map = U+F2000-U+F2002=AgentIcons
