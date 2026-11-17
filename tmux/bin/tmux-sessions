@@ -1,0 +1,113 @@
+#!/usr/bin/env zsh
+# Session picker in the same style as agent-panes.
+#   bind S run-shell -b "~/.config/tmux/bin/tmux-sessions '#{client_name}'"
+#
+# Most recently visited first; opens on the previous session, so S Enter
+# toggles between the last two. Each row shows the windows (active one
+# brighter) and the agents running in the session (red when one waits).
+# Keys: j/k or arrows move · Enter switch · n new · r rename
+#       Delete/Backspace/x kill session (asks y/n) · q/Esc close.
+
+source ${0:A:h}/picker.zsh "$@"
+
+picker_title=sessions
+picker_empty="No sessions."
+hints=('↵' switch n new r rename '⌫' kill q close)
+
+load() {
+  local keep=${ids[sel]} US=$'\x1f' s line sid name att last wact wname cmd waitflag
+  ids=() names=() lasts=() attached=()
+  typeset -gA wins=() actwin=() icons=() nagents=()
+  here=$(tmux display -p -c "$client" '#{session_id}' 2>/dev/null)
+  nattached=0 maxagents=0
+
+  # Maps are keyed by the session id without its leading $.
+  while IFS=$US read -r sid wact wname; do
+    sid=${sid#\$}
+    if (( wact )); then
+      wins[$sid]+="${wins[$sid]:+$F_dim · }$F_sub$wname"; actwin[$sid]=$wname
+    else
+      wins[$sid]+="${wins[$sid]:+$F_dim · }$F_dim$wname"
+    fi
+  done < <(tmux list-windows -a -F "#{session_id}$US#{window_active}$US#{window_name}")
+
+  while IFS=$US read -r sid cmd waitflag; do
+    (( ${agents[(Ie)$cmd]} )) || continue
+    sid=${sid#\$}
+    [[ $waitflag == 1 ]] && icons[$sid]+=$F_red || icons[$sid]+=${colors[$cmd]}
+    icons[$sid]+="${glyphs[$cmd]} "
+    nagents[$sid]=$(( ${nagents[$sid]:-0} + 1 ))
+    (( ${nagents[$sid]} > maxagents )) && maxagents=${nagents[$sid]}
+  done < <(tmux list-panes -a -F "#{session_id}$US#{pane_current_command}$US#{@agent_attention}")
+
+  local -a found
+  while IFS=$US read -r sid name att last; do
+    found+="$(( 9999999999 - ${last:-0} ))$US$name$US$sid$US$att$US${last:-0}"
+  done < <(tmux list-sessions -F "#{session_id}$US#{session_name}$US#{session_attached}$US#{session_last_attached}")
+  for line in ${(o)found}; do
+    IFS=$US read -r _ name sid att last <<< "$line"
+    ids+=$sid names+=$name attached+=$att lasts+=$last
+    (( att )) && (( nattached++ ))
+  done
+
+  width=0; for s in $names; do (( ${#s} > width )) && width=${#s}; done
+  (( ${ids[(Ie)$keep]} )) && sel=${ids[(Ie)$keep]}
+  (( sel > ${#ids} )) && sel=${#ids}
+  (( sel < 1 )) && sel=1
+}
+
+# Start on the previous session (the current one is first).
+on_start() { [[ ${ids[1]} == $here ]] && (( ${#ids} > 1 )) && sel=2; }
+
+counts() {
+  print -rn -- "$F_fg${#ids}$F_dim sessions"
+  (( nattached )) && print -rn -- "  $F_green● $F_sub$nattached attached"
+}
+
+row() {  # row <index>
+  local i=$1 sid=${ids[i]#\$} bar bg tcol mark ncol=$F_fg
+  row_style $i
+  (( attached[i] )) && mark="$F_green●" || mark="$F_dim○"
+  [[ ${ids[i]} == $here ]] && ncol=$F_accent
+  local pad=${(l:width + 3 - ${#names[i]}:: :)}
+  local age=${(l:3:: :)$(ago $lasts[i])}
+  local na=${nagents[$sid]:-0}; local ipad=${(l:(maxagents - na) * 2:: :)}
+  print -rn -- "$bg$bar $mark  $BOLD$ncol${names[i]}$R$bg$pad$F_dim$age   ${icons[$sid]}$ipad$R$bg  ${wins[$sid]}$EOL$R"
+}
+
+preview_target() { print -rn -- ${ids[sel]}; }
+preview_label() { print -rn -- "${names[sel]} › ${actwin[${ids[sel]#\$}]}"; }
+
+on_key() {
+  local sid=${ids[sel]} name=${names[sel]} err
+  case $key in
+    $'\n')
+      (( ${#ids} )) || return
+      tmux switch-client -c "$client" -t "$sid"
+      exit 0 ;;
+    n)
+      ask "new session" || { say "Cancelled."; return; }
+      [[ -n $REPLY ]] || { say "Cancelled."; return; }
+      if err=$(tmux new-session -d -s "$REPLY" -c "$HOME" 2>&1); then
+        tmux switch-client -c "$client" -t "=$REPLY"
+        exit 0
+      fi
+      say "$err" $F_red ;;
+    r)
+      (( ${#ids} )) || return
+      ask "rename $name to" "$name" || { say "Cancelled."; return; }
+      [[ -n $REPLY && $REPLY != $name ]] || { say "Unchanged."; return; }
+      if err=$(tmux rename-session -t "$sid" -- "$REPLY" 2>&1); then say "Renamed to $REPLY." $F_green
+      else say "$err" $F_red; fi
+      load ;;
+    DEL|x)
+      (( ${#ids} )) || return
+      local n=$(tmux display -p -t "$sid" '#{session_windows}')
+      confirm "Kill session $name ($n window${${n:#1}:+s})?" || return
+      if err=$(tmux kill-session -t "$sid" 2>&1); then say "Killed $name." $F_green
+      else say "$err" $F_red; fi
+      load ;;
+  esac
+}
+
+picker_run
