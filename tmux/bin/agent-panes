@@ -113,7 +113,10 @@ draw() {
     out+="$EOL"$'\n'"  $F_line──$F_accent$label$F_line${(l:cols-6-${#label}::─:)}$R$EOL"$'\n'
     local -a prev=("${(@f)$(tmux capture-pane -e -p -t "${ids[sel]}" 2>/dev/null)}")
     while (( ${#prev} )) && [[ -z ${${prev[-1]//$'\e'\[[0-9;:]#m/}// } ]]; do prev[-1]=(); done
-    for line in "${(@)prev[-(room-1),-1]}"; do out+="   $line$R$EOL"$'\n'; done
+    # No reset between lines: capture-pane -e only emits color changes, so a
+    # highlight that reaches the right edge carries on into the next line.
+    for line in "${(@)prev[-(room-1),-1]}"; do out+="   $line$EOL"$'\n'; done
+    out+=$R
   fi
   out+=$'\e[J'
   # Footer: message, or key hints styled as the accent key plus a dim label.
@@ -123,7 +126,7 @@ draw() {
   else
     local k
     for k in '↵' jump '⌫' kill X 'kill all' q close; do
-      [[ $k == (↵|⌫|X|q) ]] && out+="$F_accent$BOLD$k$R " || out+="$F_dim$k   "
+      [[ $k == (↵|⌫|X|q) ]] && out+="$F_accent$BOLD$k$R  " || out+="$F_dim$k   "
     done
   fi
   out+="$R$EOL"$'\e[?2026l'
